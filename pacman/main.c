@@ -24,7 +24,7 @@
 #define WORLD_OFFESET ((Vector2) { .x = 100, .y = 10 })
 #define VECTOR2(xx, yy) ((Vector2) { .x = (xx), .y = (yy) })
 
-#define TIME_TO_NEXT_BLK 0.150
+#define TIME_TO_NEXT_BLK 0.220
 
 #define CAPACITY 64
 #define DA_APPEND(da, v) { \
@@ -139,7 +139,21 @@ typedef struct {
 
 struct Pacman {
     Entity entity;
+    int state;
     Direction nextDirection;
+};
+
+static bool pacman_moving = false;
+static struct Pacman pacman = {
+    .entity = {
+        .direction = RIGHT,
+        .size = VECTOR2(BLOCK_HEIGHT, BLOCK_HEIGHT),
+        .pos = VECTOR2(1, 29),
+        .last_pos = VECTOR2(1, 29),
+        .screen_pos = { 0 }
+    },
+    .state = 1,
+    .nextDirection = RIGHT,
 };
 
 struct Ghost {
@@ -153,23 +167,12 @@ struct Ghost {
     } path;
 };
 
-static bool pacman_moving = false;
-static struct Pacman pacman = {
-    .entity = {
-        .direction = RIGHT,
-        .size = VECTOR2(BLOCK_WIDTH / 2, BLOCK_WIDTH / 2),
-        .pos = VECTOR2(1, 29),
-        .last_pos = VECTOR2(1, 29),
-        .screen_pos = { 0 }
-    },
-    .nextDirection = RIGHT,
-};
-
-static struct Ghost ghosts[4] = {
+#define TOTAL_GHOSTS 4
+static struct Ghost ghosts[TOTAL_GHOSTS] = {
     {
         .entity = {
             .direction = RIGHT,
-            .size = VECTOR2(28, 28),
+            .size = VECTOR2(BLOCK_HEIGHT, BLOCK_HEIGHT),
             .pos = VECTOR2(16, 14),
             .last_pos = VECTOR2(16, 14),
             .screen_pos = { 0 },
@@ -180,7 +183,7 @@ static struct Ghost ghosts[4] = {
     {
         .entity = {
             .direction = LEFT,
-            .size = VECTOR2(28, 28),
+            .size = VECTOR2(BLOCK_HEIGHT, BLOCK_HEIGHT),
             .pos = VECTOR2(15, 14),
             .last_pos = VECTOR2(15, 14),
             .screen_pos = { 0 }
@@ -191,7 +194,7 @@ static struct Ghost ghosts[4] = {
     {
         .entity = {
             .direction = LEFT,
-            .size = VECTOR2(28, 28),
+            .size = VECTOR2(BLOCK_HEIGHT, BLOCK_HEIGHT),
             .pos = VECTOR2(14, 14),
             .last_pos = VECTOR2(14, 14),
             .screen_pos = { 0 }
@@ -202,7 +205,7 @@ static struct Ghost ghosts[4] = {
     {
         .entity = {
             .direction = LEFT,
-            .size = VECTOR2(28, 28),
+            .size = VECTOR2(BLOCK_HEIGHT, BLOCK_HEIGHT),
             .pos = VECTOR2(14, 14),
             .last_pos = VECTOR2(14, 14),
             .screen_pos = { 0 }
@@ -212,11 +215,8 @@ static struct Ghost ghosts[4] = {
     },
 };
 
-static_assert(sizeof(ghosts) > 0);
-const size_t TOTAL_GHOSTS = sizeof(ghosts)/sizeof(ghosts[0]);
-
 static struct {
-    Texture2D ghosts_texture;
+    Texture2D textures;
 } game = { 0 };
 
 bool follow_pacman = false;
@@ -262,6 +262,7 @@ Vector2 calcNewPosition(Vector2 old_position, Direction d) {
 }
 
 void movePacman(void) {
+    // TraceLog(LOG_INFO, "%d", pacman.state);
     pacman_moving = false;
 
     Vector2 newpos;
@@ -281,6 +282,7 @@ void movePacman(void) {
         pacman.entity.pos = newpos;
         pacman.entity.screen_pos = world2screen(pacman.entity.last_pos);
         pacman_moving = true;
+        pacman.state = !pacman.state;
     }
 }
 
@@ -420,33 +422,65 @@ void drawWorld() {
     }
 }
 
+typedef enum {
+    UPPER_LEFT = 0,
+    CENTER,
+    MIDDLE_BOTTOM,
+} Dest_Offset;
+
+void drawEntity(Texture2D texture, Entity entity, int offsetx, int offsety, Dest_Offset origin, float rot) {
+    Rectangle source = {
+        .height = 32,
+        .width = 32,
+        .x = offsetx*32,
+        .y = offsety*32
+    };
+
+    Rectangle dest = {
+        .height = entity.size.y,
+        .width = entity.size.x,
+        .x = entity.screen_pos.x,
+        .y = entity.screen_pos.y
+    };
+
+    Vector2 vorigin;
+    switch (origin) {
+        case MIDDLE_BOTTOM: assert(0 && "TODO: not implemented");
+
+        case CENTER: {
+            vorigin.x = dest.width/2;
+            vorigin.y = dest.height/2;
+            dest.x += vorigin.x;
+            dest.y += vorigin.y;
+        } break;
+
+        default: vorigin = Vector2Zero();
+    }
+
+    DrawTexturePro(texture, source, dest, vorigin, rot, WHITE);
+}
+
 void drawPacman() {
-    Vector2 center = Vector2AddValue(pacman.entity.screen_pos, pacman.entity.size.x);
-    DrawCircleV(center, pacman.entity.size.x, YELLOW);
+    static float rots[] = {
+        [RIGHT] = 000.0f,
+        [DOWN]  = 090.0f,
+        [LEFT]  = 180.0f,
+        [UP]    = 270.0f
+    };
+
+    drawEntity(
+        game.textures,
+        pacman.entity,
+        pacman.state,
+        5,
+        CENTER,
+        rots[pacman.entity.direction]
+    );
 }
 
 void drawGhosts() {
-    const int ghost_size = 32;
-    static Rectangle source = {
-        .height = ghost_size,
-        .width = ghost_size,
-        .x = 0,
-        .y = 0
-    };
-
     for (size_t i = 0; i < TOTAL_GHOSTS; i++) {
-        source.x = ghosts[i].entity.direction*ghost_size;
-        source.y = i*ghost_size;
-        Rectangle dest = {
-            .height = ghosts[i].entity.size.y,
-            .width = ghosts[i].entity.size.x,
-            .x = ghosts[i].entity.screen_pos.x,
-            .y = ghosts[i].entity.screen_pos.y
-        };
-
-        DrawRectangleLinesEx(dest, 1, RED);
-
-        DrawTexturePro(game.ghosts_texture, source, dest, Vector2Zero(), 0.0f, WHITE);
+        drawEntity(game.textures, ghosts[i].entity, ghosts[i].entity.direction, i, UPPER_LEFT, 0.0f);
     }
 }
 
@@ -494,8 +528,8 @@ int main(void) {
     SetRandomSeed(time(NULL));
 
 
-    Image image = LoadImage("./assets/ghosts.png");
-    game.ghosts_texture = LoadTextureFromImage(image);
+    Image image = LoadImage("./assets/pacman.png");
+    game.textures = LoadTextureFromImage(image);
 
     while (!WindowShouldClose() && !quit) {
         handle_input();
