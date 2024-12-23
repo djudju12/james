@@ -24,7 +24,8 @@
 #define WORLD_OFFESET ((Vector2) { .x = 100, .y = 10 })
 #define VECTOR2(xx, yy) ((Vector2) { .x = (xx), .y = (yy) })
 
-#define TIME_TO_NEXT_BLK 0.220
+#define TIME_TO_NEXT_BLK  0.220
+#define TIME_PACMAN_DYING 1.000
 
 #define CAPACITY 64
 #define DA_APPEND(da, v) { \
@@ -149,15 +150,10 @@ struct Pacman {
 static bool pacman_moving = false;
 static struct Pacman pacman = {
     .entity = {
-        .direction = RIGHT,
         .size = VECTOR2(BLOCK_HEIGHT, BLOCK_HEIGHT),
-        .pos = VECTOR2(1, 29),
-        .last_pos = VECTOR2(1, 29),
-        .screen_pos = { 0 }
     },
     .points = 0,
     .state = 1,
-    .nextDirection = RIGHT,
     .lifes = 3
 };
 
@@ -176,44 +172,25 @@ struct Ghost {
 static struct Ghost ghosts[TOTAL_GHOSTS] = {
     {
         .entity = {
-            .direction = RIGHT,
             .size = VECTOR2(BLOCK_HEIGHT, BLOCK_HEIGHT),
-            .pos = VECTOR2(16, 14),
-            .last_pos = VECTOR2(16, 14),
-            .screen_pos = { 0 },
         },
-        .target = VECTOR2(16, 14),
         .path = { 0 }
     },
     {
         .entity = {
-            .direction = LEFT,
             .size = VECTOR2(BLOCK_HEIGHT, BLOCK_HEIGHT),
-            .pos = VECTOR2(15, 14),
-            .last_pos = VECTOR2(15, 14),
-            .screen_pos = { 0 }
         },
-        .target = VECTOR2(15, 14),
         .path = { 0 }
     },
     {
         .entity = {
-            .direction = LEFT,
             .size = VECTOR2(BLOCK_HEIGHT, BLOCK_HEIGHT),
-            .pos = VECTOR2(14, 14),
-            .last_pos = VECTOR2(14, 14),
-            .screen_pos = { 0 }
         },
-        .target = VECTOR2(14, 14),
         .path = { 0 }
     },
     {
         .entity = {
-            .direction = LEFT,
             .size = VECTOR2(BLOCK_HEIGHT, BLOCK_HEIGHT),
-            .pos = VECTOR2(14, 14),
-            .last_pos = VECTOR2(14, 14),
-            .screen_pos = { 0 }
         },
         .target = VECTOR2(14, 14),
         .path = { 0 }
@@ -222,6 +199,10 @@ static struct Ghost ghosts[TOTAL_GHOSTS] = {
 
 static struct {
     Texture2D textures;
+    enum {
+        DEFAULT = 0,
+        PACMAN_DYING
+    } state;
 } game = { 0 };
 
 bool follow_pacman = false;
@@ -267,7 +248,6 @@ Vector2 calcNewPosition(Vector2 old_position, Direction d) {
 }
 
 void movePacman(void) {
-    // TraceLog(LOG_INFO, "%d", pacman.state);
     pacman_moving = false;
 
     Vector2 newpos;
@@ -410,24 +390,57 @@ void updatePoints(void) {
     world[iy][ix] = ' ';
 }
 
+void reset() {
+    game.state = DEFAULT;
+    pacman.entity.screen_pos = world2screen(pacman.entity.pos);
+    pacman.entity.direction = RIGHT;
+    pacman.entity.pos = VECTOR2(1, 29);
+    pacman.entity.last_pos = VECTOR2(1, 29);
+    pacman.nextDirection = RIGHT;
+
+    for (size_t i = 0; i < TOTAL_GHOSTS; i++) {
+        ghosts[i].entity.pos = VECTOR2(16, 14);
+        ghosts[i].entity.last_pos = VECTOR2(16, 14);
+        ghosts[i].target = VECTOR2(16, 14);
+        ghosts[i].entity.direction = i%4;
+        ghosts[i].entity.screen_pos = world2screen(ghosts[i].entity.pos);
+    }
+}
+
+void updateDyingState(float dt) {
+    timeacc += dt;
+    pacman.state = (int) ((timeacc/TIME_PACMAN_DYING)*8);
+}
+
 void update(void) {
     float dt = GetFrameTime();
-    if (isTimeToMove(dt)) {
-        updatePoints();
-        movePacman();
-        moveGhosts();
-    } else {
-        if (pacman_moving) {
-            pacman.entity.screen_pos = animate(pacman.entity);
+    switch (game.state) {
+        case PACMAN_DYING: {
+            updateDyingState(dt);
+            if (timeacc >= TIME_PACMAN_DYING) reset();
+        } break;
+
+        default: {
+            if (isTimeToMove(dt)) {
+                updatePoints();
+                movePacman();
+                moveGhosts();
+            } else {
+                if (pacman_moving) {
+                    pacman.entity.screen_pos = animate(pacman.entity);
+                }
+
+                animateGhosts();
+            }
+
+            if (checkCollissions()) {
+                pacman.lifes--;
+                quit = pacman.lifes == 0;
+                game.state = PACMAN_DYING;
+                timeacc = 0;
+            }
         }
-
-        animateGhosts();
     }
-
-    // if (checkCollissions()) {
-    //     pacman.lifes--;
-    //     quit = pacman.lifes == 0;
-    // }
 }
 
 static const int point_size = 4;
@@ -500,14 +513,25 @@ void drawPacman() {
         [UP]    = 270.0f
     };
 
-    drawEntity(
-        game.textures,
-        pacman.entity,
-        pacman.state,
-        5,
-        CENTER,
-        rots[pacman.entity.direction]
-    );
+    if (game.state == DEFAULT) {
+        drawEntity(
+            game.textures,
+            pacman.entity,
+            pacman.state,
+            5,
+            CENTER,
+            rots[pacman.entity.direction]
+        );
+    } else {
+        drawEntity(
+            game.textures,
+            pacman.entity,
+            pacman.state%4,
+            5 + (int) (pacman.state/4),
+            CENTER,
+            rots[pacman.entity.direction]
+        );
+    }
 }
 
 void drawGhosts() {
@@ -551,14 +575,8 @@ void draw() {
 
 int main(void) {
     InitWindow(SWIDTH + WORLD_OFFESET.x*2, SHEIGHT + WORLD_OFFESET.y*2, "Pacman");
-
-    pacman.entity.screen_pos = world2screen(pacman.entity.pos);
-    for (size_t i = 0; i < TOTAL_GHOSTS; i++) {
-        ghosts[i].entity.screen_pos = world2screen(ghosts[i].entity.pos);
-    }
-
     SetRandomSeed(time(NULL));
-
+    reset();
 
     Image image = LoadImage("./assets/pacman.png");
     game.textures = LoadTextureFromImage(image);
