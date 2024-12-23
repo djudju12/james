@@ -151,7 +151,6 @@ struct Ghost {
         size_t capacity;
         size_t curr;
     } path;
-
 };
 
 static bool pacman_moving = false;
@@ -166,11 +165,11 @@ static struct Pacman pacman = {
     .nextDirection = RIGHT,
 };
 
-static struct Ghost ghosts[] = {
+static struct Ghost ghosts[4] = {
     {
         .entity = {
             .direction = RIGHT,
-            .size = VECTOR2(BLOCK_WIDTH / 2, BLOCK_WIDTH / 2),
+            .size = VECTOR2(28, 28),
             .pos = VECTOR2(16, 14),
             .last_pos = VECTOR2(16, 14),
             .screen_pos = { 0 },
@@ -178,32 +177,47 @@ static struct Ghost ghosts[] = {
         .target = VECTOR2(16, 14),
         .path = { 0 }
     },
-    // {
-    //     .entity = {
-    //         .direction = LEFT,
-    //         .size = VECTOR2(BLOCK_WIDTH / 2, BLOCK_WIDTH / 2),
-    //         .pos = VECTOR2(15, 14),
-    //         .last_pos = VECTOR2(15, 14),
-    //         .screen_pos = { 0 }
-    //     },
-    //     .target = VECTOR2(15, 14),
-    //     .path = { 0 }
-    // },
-    // {
-    //     .entity = {
-    //         .direction = LEFT,
-    //         .size = VECTOR2(BLOCK_WIDTH / 2, BLOCK_WIDTH / 2),
-    //         .pos = VECTOR2(14, 14),
-    //         .last_pos = VECTOR2(14, 14),
-    //         .screen_pos = { 0 }
-    //     },
-    //     .target = VECTOR2(14, 14),
-    //     .path = { 0 }
-    // },
+    {
+        .entity = {
+            .direction = LEFT,
+            .size = VECTOR2(28, 28),
+            .pos = VECTOR2(15, 14),
+            .last_pos = VECTOR2(15, 14),
+            .screen_pos = { 0 }
+        },
+        .target = VECTOR2(15, 14),
+        .path = { 0 }
+    },
+    {
+        .entity = {
+            .direction = LEFT,
+            .size = VECTOR2(28, 28),
+            .pos = VECTOR2(14, 14),
+            .last_pos = VECTOR2(14, 14),
+            .screen_pos = { 0 }
+        },
+        .target = VECTOR2(14, 14),
+        .path = { 0 }
+    },
+    {
+        .entity = {
+            .direction = LEFT,
+            .size = VECTOR2(28, 28),
+            .pos = VECTOR2(14, 14),
+            .last_pos = VECTOR2(14, 14),
+            .screen_pos = { 0 }
+        },
+        .target = VECTOR2(14, 14),
+        .path = { 0 }
+    },
 };
 
 static_assert(sizeof(ghosts) > 0);
 const size_t TOTAL_GHOSTS = sizeof(ghosts)/sizeof(ghosts[0]);
+
+static struct {
+    Texture2D ghosts_texture;
+} game = { 0 };
 
 bool follow_pacman = false;
 void handle_input() {
@@ -412,9 +426,27 @@ void drawPacman() {
 }
 
 void drawGhosts() {
+    const int ghost_size = 32;
+    static Rectangle source = {
+        .height = ghost_size,
+        .width = ghost_size,
+        .x = 0,
+        .y = 0
+    };
+
     for (size_t i = 0; i < TOTAL_GHOSTS; i++) {
-        Vector2 center = Vector2AddValue(ghosts[i].entity.screen_pos, ghosts[i].entity.size.x);
-        DrawCircleV(center, ghosts[i].entity.size.x, BLUE);
+        source.x = ghosts[i].entity.direction*ghost_size;
+        source.y = i*ghost_size;
+        Rectangle dest = {
+            .height = ghosts[i].entity.size.y,
+            .width = ghosts[i].entity.size.x,
+            .x = ghosts[i].entity.screen_pos.x,
+            .y = ghosts[i].entity.screen_pos.y
+        };
+
+        DrawRectangleLinesEx(dest, 1, RED);
+
+        DrawTexturePro(game.ghosts_texture, source, dest, Vector2Zero(), 0.0f, WHITE);
     }
 }
 
@@ -452,6 +484,8 @@ void draw() {
 }
 
 int main(void) {
+    InitWindow(SWIDTH + WORLD_OFFESET.x*2, SHEIGHT + WORLD_OFFESET.y*2, "Pacman");
+
     pacman.entity.screen_pos = world2screen(pacman.entity.pos);
     for (size_t i = 0; i < TOTAL_GHOSTS; i++) {
         ghosts[i].entity.screen_pos = world2screen(ghosts[i].entity.pos);
@@ -459,7 +493,10 @@ int main(void) {
 
     SetRandomSeed(time(NULL));
 
-    InitWindow(SWIDTH + WORLD_OFFESET.x*2, SHEIGHT + WORLD_OFFESET.y*2, "Pacman");
+
+    Image image = LoadImage("./assets/ghosts.png");
+    game.ghosts_texture = LoadTextureFromImage(image);
+
     while (!WindowShouldClose() && !quit) {
         handle_input();
         update();
