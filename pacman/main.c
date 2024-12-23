@@ -42,10 +42,11 @@
 
 typedef enum {
     WALL_1 = '#',
-    NO_BLOCK = ' '
-} Blocks;
+    NO_BLOCK = ' ',
+    POINT = 'p' // not used directly in the map construction, but inserted in runtime
+} Block;
 
-Blocks world[WHEIGHT][WWIDTH] = {
+Block world[WHEIGHT][WWIDTH] = {
     { '#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#' },
     { '#',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ','#','#',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ','#' },
     { '#',' ','#','#','#','#',' ','#','#','#','#','#',' ','#','#',' ','#','#','#','#','#',' ','#','#','#','#',' ','#' },
@@ -139,8 +140,10 @@ typedef struct {
 
 struct Pacman {
     Entity entity;
-    int state;
     Direction nextDirection;
+    int state;
+    int points;
+    int lifes;
 };
 
 static bool pacman_moving = false;
@@ -152,8 +155,10 @@ static struct Pacman pacman = {
         .last_pos = VECTOR2(1, 29),
         .screen_pos = { 0 }
     },
+    .points = 0,
     .state = 1,
     .nextDirection = RIGHT,
+    .lifes = 3
 };
 
 struct Ghost {
@@ -393,9 +398,22 @@ bool checkCollissions(void) {
     return false;
 }
 
+void updatePoints(void) {
+    int ix = pacman.entity.pos.x;
+    int iy = pacman.entity.pos.y;
+    Block b = world[iy][ix];
+    switch (b) {
+        case POINT: pacman.points++; break;
+        default: return;
+    }
+
+    world[iy][ix] = ' ';
+}
+
 void update(void) {
     float dt = GetFrameTime();
     if (isTimeToMove(dt)) {
+        updatePoints();
         movePacman();
         moveGhosts();
     } else {
@@ -406,16 +424,30 @@ void update(void) {
         animateGhosts();
     }
 
-    if (checkCollissions()) quit = true;
+    // if (checkCollissions()) {
+    //     pacman.lifes--;
+    //     quit = pacman.lifes == 0;
+    // }
 }
 
+static const int point_size = 4;
+static const int point_offsetx = BLOCK_WIDTH/2 - point_size/2;
+static const int point_offsety = BLOCK_HEIGHT/2 - point_size/2;
 void drawWorld() {
     ClearBackground(BACKGROUD_COLOR);
     for (size_t y = 0; y < WHEIGHT; y++) {
         for (size_t x = 0; x < WWIDTH; x++) {
             Vector2 spos = world2screen(VECTOR2(x, y));
             switch (world[y][x]) {
-                case '#': DrawRectangleLinesEx((Rectangle){ .height = BLOCK_HEIGHT, .width = BLOCK_WIDTH, .x = spos.x, .y = spos.y }, 1, WHITE);
+                case '#': DrawRectangleLinesEx((Rectangle){ .height = BLOCK_HEIGHT, .width = BLOCK_WIDTH, .x = spos.x, .y = spos.y }, 1, WHITE); break;
+                case 'p': {
+                    DrawRectangleRec((Rectangle){
+                        .height = point_size,
+                        .width = point_size,
+                        .x = spos.x + point_offsetx,
+                        .y = spos.y + point_offsety
+                    }, YELLOW);
+                } break;
                 default: { }
             }
         }
@@ -530,6 +562,15 @@ int main(void) {
 
     Image image = LoadImage("./assets/pacman.png");
     game.textures = LoadTextureFromImage(image);
+
+    const size_t lvalid_positions = ARRAY_SIZE(validPositions);
+    for (size_t i = 0; i < lvalid_positions; i++) {
+        int ix = validPositions[i].x;
+        int iy = validPositions[i].y;
+        if (world[iy][ix] == ' ') {
+            world[iy][ix] = 'p';
+        }
+    }
 
     while (!WindowShouldClose() && !quit) {
         handle_input();
