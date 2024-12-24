@@ -199,6 +199,7 @@ static struct Ghost ghosts[TOTAL_GHOSTS] = {
 
 static struct {
     Texture2D textures;
+    Texture2D map;
     enum {
         DEFAULT = 0,
         PACMAN_DYING
@@ -452,7 +453,7 @@ void drawWorld() {
         for (size_t x = 0; x < WWIDTH; x++) {
             Vector2 spos = world2screen(VECTOR2(x, y));
             switch (world[y][x]) {
-                case '#': DrawRectangleLinesEx((Rectangle){ .height = BLOCK_HEIGHT, .width = BLOCK_WIDTH, .x = spos.x, .y = spos.y }, 1, WHITE); break;
+                // case '#': DrawRectangleLinesEx((Rectangle){ .height = BLOCK_HEIGHT, .width = BLOCK_WIDTH, .x = spos.x, .y = spos.y }, 1, WHITE); break;
                 case 'p': {
                     DrawRectangleRec((Rectangle){
                         .height = point_size,
@@ -465,6 +466,24 @@ void drawWorld() {
             }
         }
     }
+
+    Rectangle src = {
+        .height = 806,
+        .width = 812,
+        .x = 0,
+        .y = 0
+    };
+
+    Rectangle dst = {
+        .height = BLOCK_HEIGHT*WHEIGHT,
+        .width = BLOCK_WIDTH*WWIDTH
+    };
+
+    Vector2 dst_pos = world2screen(Vector2Zero());
+    dst.x = dst_pos.x;
+    dst.y = dst_pos.y;
+
+    DrawTexturePro(game.map, src, dst, Vector2Zero(), 0.0f, WHITE);
 }
 
 typedef enum {
@@ -578,8 +597,8 @@ int main(void) {
     SetRandomSeed(time(NULL));
     reset();
 
-    Image image = LoadImage("./assets/pacman.png");
-    game.textures = LoadTextureFromImage(image);
+    game.textures = LoadTextureFromImage(LoadImage("./assets/pacman.png"));
+    game.map = LoadTextureFromImage(LoadImage("./assets/map_pacman.png"));
 
     const size_t lvalid_positions = ARRAY_SIZE(validPositions);
     for (size_t i = 0; i < lvalid_positions; i++) {
